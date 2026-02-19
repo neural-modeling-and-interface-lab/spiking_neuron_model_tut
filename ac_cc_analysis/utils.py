@@ -11,7 +11,6 @@ import scipy.signal
 from scipy.signal import find_peaks
 from diptest import diptest
 import numpy as np
-from scipy.stats import gaussian_kde, kstest
 
 
 
@@ -89,6 +88,7 @@ def plot_rate_heatmap(pkl_path: str, save_path: str, n_bins: int = 1000, event_l
         pos_heat = ax_heat.get_position()
         pos_ev = ax_ev.get_position()
         ax_ev.set_position([pos_heat.x0, pos_ev.y0, pos_heat.width, pos_ev.height])
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
     print(f"Saved to {save_path}")
 
