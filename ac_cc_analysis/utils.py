@@ -235,9 +235,10 @@ def compute_correlogram_normalized_cc_first(
         y = np.pad(y, (0, T - len(y)), 'constant')
 
         corr = scipy.signal.correlate(y, x, mode='full')
-        center = len(corr) // 2
+        center = len(corr) // 2 
         corr_trim = corr[center - max_lag_ms : center + max_lag_ms + 1]
-
+        # convert all values to integers
+        corr_trim = corr_trim
         if mode == 'auto':
             corr_trim[max_lag_bins] -= np.sum(x)
 
@@ -246,8 +247,17 @@ def compute_correlogram_normalized_cc_first(
             corr_trim[int(lags[i] + max_lag_ms):int(lags[i+1] + max_lag_ms)].sum()
             for i in range(2 * max_lag_bins)
         ])
-        return (lags[:-1] + lags[1:]) / 2, binned
+        # binned = np.array([
+        #     corr_trim[int(lags[i] + max_lag_ms): int(lags[i+1] + max_lag_ms) if i < 2 * max_lag_bins - 1 else len(corr_trim)].sum()
+        #     for i in range(2 * max_lag_bins)
+        #     ])
 
+        return (lags[:-1] + lags[1:]) / 2, binned
+    
+
+
+    
+    
     def normalize(binned, fr_x, fr_y, T, bin_size):
         E = fr_x * fr_y * T * bin_size 
         return binned / E if E > 0 else binned.copy()
@@ -318,6 +328,7 @@ def compute_correlogram_normalized_cc_first(
         T = max((x.max() if len(x) else 0), (y.max() if len(y) else 0)) + 1
 
     lags, binned = bin_correlate(x, y, max_lag_ms, bin_size, T, mode)
+    cc_norm = binned 
     cc_norm = normalize(binned, firing_rate_x, firing_rate_y, T, bin_size)
 
     mean_cc = cc_norm.mean()
@@ -491,8 +502,15 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
 
         autocorrs = {n: compute_correlogram_normalized(neuron_spike_trains[n].astype(float), neuron_spike_trains[n].astype(float), max_lag, bin_size, 'auto') 
                     for n in neuron_ids}
-        crosscorrs = {(pre, post): compute_correlogram_normalized_cc_first(neuron_spike_trains[pre].astype(float), neuron_spike_trains[post].astype(float), max_lag, bin_size, 'cross', firing_rate[pre], firing_rate[post], max(global_max_times[pre], global_max_times[post]))
-                     for pre in neuron_ids for post in neuron_ids if pre != post}
+        crosscorrs = {(pre, post): compute_correlogram_normalized_cc_first(
+            neuron_spike_trains[pre].astype(float),
+            neuron_spike_trains[post].astype(float),
+            max_lag, bin_size, 'cross',
+            firing_rate[pre], firing_rate[post],
+            max(global_max_times[pre], global_max_times[post])
+        )
+        for i, pre in enumerate(neuron_ids) for j, post in enumerate(neuron_ids)
+        if i < j} # only compute the upper triangle of the matrix
         if make_plots:
             fig_size = min(24, 1.2 * (len(neuron_ids) + 1))
             fig = plt.figure(figsize=(fig_size, fig_size))
@@ -502,7 +520,11 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
                 for j, post_id in enumerate(neuron_ids):
                     ax = fig.add_subplot(gs[i + 1, j + 1])
                     if pre_id != post_id:
-                        lags, corr, mean_corr, std_corr, z_score, total_bump_score = crosscorrs[(pre_id, post_id)]
+                        if (pre_id, post_id) in crosscorrs:
+                            lags, corr, mean_corr, std_corr, z_score, total_bump_score = crosscorrs[(pre_id, post_id)]
+                        else:
+                            lags, corr, mean_corr, std_corr, z_score, total_bump_score = crosscorrs[(post_id, pre_id)]
+                            corr = corr[::-1]
                         # Same plot style as pipeline rank fig: stair fill 0→line, red, mean line, gray ±std band
                         n = len(corr)
                         if len(lags) > n:
