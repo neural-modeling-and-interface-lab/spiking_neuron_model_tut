@@ -228,7 +228,6 @@ def compute_correlogram_normalized_cc_first(
     x, y, max_lag_ms, bin_size, mode,
     firing_rate_x, firing_rate_y, T, score_type='bump'):
 
-
     def bin_correlate(x, y, max_lag_ms, bin_size, T, mode):
         max_lag_bins = int(max_lag_ms / bin_size)
         print(max_lag_bins,max_lag_ms,bin_size,T)
@@ -242,9 +241,7 @@ def compute_correlogram_normalized_cc_first(
         corr_trim = corr_trim
         if mode == 'auto':
             # remove the center bin
-            print('max_lag_ms',max_lag_ms,corr_trim[max_lag_bins], corr_trim[len(corr_trim)//2] )
             corr_trim[len(corr_trim)//2] -= np.sum(x)
-        print('corr_trim',corr_trim)
 
         lags = np.arange(-max_lag_bins, max_lag_bins + 1) * bin_size
         binned = np.array([
