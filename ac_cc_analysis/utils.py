@@ -231,6 +231,7 @@ def compute_correlogram_normalized_cc_first(
 
     def bin_correlate(x, y, max_lag_ms, bin_size, T, mode):
         max_lag_bins = int(max_lag_ms / bin_size)
+        print(max_lag_bins,max_lag_ms,bin_size,T)
         x = np.pad(x, (0, T - len(x)), 'constant')
         y = np.pad(y, (0, T - len(y)), 'constant')
 
@@ -240,18 +241,16 @@ def compute_correlogram_normalized_cc_first(
         # convert all values to integers
         corr_trim = corr_trim
         if mode == 'auto':
-            corr_trim[max_lag_bins] -= np.sum(x)
+            # remove the center bin
+            print('max_lag_ms',max_lag_ms,corr_trim[max_lag_bins], corr_trim[len(corr_trim)//2] )
+            corr_trim[len(corr_trim)//2] -= np.sum(x)
+        print('corr_trim',corr_trim)
 
         lags = np.arange(-max_lag_bins, max_lag_bins + 1) * bin_size
         binned = np.array([
             corr_trim[int(lags[i] + max_lag_ms):int(lags[i+1] + max_lag_ms)].sum()
             for i in range(2 * max_lag_bins)
         ])
-        # binned = np.array([
-        #     corr_trim[int(lags[i] + max_lag_ms): int(lags[i+1] + max_lag_ms) if i < 2 * max_lag_bins - 1 else len(corr_trim)].sum()
-        #     for i in range(2 * max_lag_bins)
-        #     ])
-
         return (lags[:-1] + lags[1:]) / 2, binned
     
 
@@ -329,7 +328,10 @@ def compute_correlogram_normalized_cc_first(
 
     lags, binned = bin_correlate(x, y, max_lag_ms, bin_size, T, mode)
     cc_norm = binned 
-    cc_norm = normalize(binned, firing_rate_x, firing_rate_y, T, bin_size)
+    if mode == 'cross':
+        cc_norm = normalize(binned, firing_rate_x, firing_rate_y, T, bin_size)
+    else:
+        cc_norm = binned
 
     mean_cc = cc_norm.mean()
     std_cc  = cc_norm.std()
@@ -364,6 +366,8 @@ def compute_correlogram_normalized(x, y, max_lag_ms, bin_size, mode, score_type=
     mode is either 'auto' or 'cross'
     firing_rate_x, firing_rate_y, T, edge_mean, score_type are included for compatibility
     Returns correlogram with normalization and scoring to match compute_correlogram_normalized output
+
+    how does this deal wit hthe center peak? then what is the center bin plotting??
     '''
     # Resample and binarize
     n_original = len(x)
@@ -414,6 +418,7 @@ def compute_correlogram_normalized(x, y, max_lag_ms, bin_size, mode, score_type=
         pct_empty = np.mean(corr_normalized == 0)
         if len(peaks) > 0:
             total_score += np.sum(corr_normalized[peaks] * (1 - pct_empty))
+    print(lags,corr_normalized)
     
     return lags, corr_normalized, mean_normalized, std_normalized, scores, total_score
 
@@ -500,8 +505,20 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
             neuron_spike_trains[neuron_id] = np.histogram(spike_indices, bins=num_bins, range=(0, global_max_time))[0] > 0
             firing_rate[neuron_id] = np.sum(neuron_spike_trains[neuron_id]) / global_max_time 
 
-        autocorrs = {n: compute_correlogram_normalized(neuron_spike_trains[n].astype(float), neuron_spike_trains[n].astype(float), max_lag, bin_size, 'auto') 
-                    for n in neuron_ids}
+        # autocorrs = {n: compute_correlogram_normalized(neuron_spike_trains[n].astype(float), neuron_spike_trains[n].astype(float), max_lag, bin_size, 'auto') 
+        #             for n in neuron_ids}
+
+            
+
+
+        autocorrs = {(pre): compute_correlogram_normalized_cc_first(
+            neuron_spike_trains[pre].astype(float),
+            neuron_spike_trains[pre].astype(float),
+            max_lag, bin_size, 'auto',
+            firing_rate[pre], firing_rate[pre],
+            max(global_max_times[pre], global_max_times[pre])
+        )
+        for i, pre in enumerate(neuron_ids) } # only compute the upper triangle of the matrix
         crosscorrs = {(pre, post): compute_correlogram_normalized_cc_first(
             neuron_spike_trains[pre].astype(float),
             neuron_spike_trains[post].astype(float),
@@ -580,7 +597,7 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
                 # Truncate to max 5 letters for title, removing "neuron" prefix
                 neuron_id_short = neuron_id.replace("neuron", "")[:5]
                 ax_top.set_title(neuron_id_short, fontsize=6, pad=2)
-                ax_top.set_box_aspect(1)
+                # ax_top.set_box_aspect(1)
                 
                 ax_left = fig.add_subplot(gs[idx + 1, 0])
                 # Fill under the .step plot with color
@@ -596,7 +613,9 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
                 # Truncate to max 5 letters for ylabel, removing "neuron" prefix
                 neuron_id_short = neuron_id.replace("neuron", "")[:5]
                 ax_left.set_ylabel(neuron_id_short, fontsize=6)
-                ax_left.set_box_aspect(1)
+                # ax_left.set_box_aspect(1)
+                ax_top.set_aspect('auto')
+                ax_left.set_aspect('auto')
             
             ax_corner = fig.add_subplot(gs[0, 0])
             ax_corner.axis('off')
@@ -617,11 +636,8 @@ def plot_neuron_correlation_matrices(neurons, save_dir, sample_rate=1, edge_mean
             print(f'Saved {resolution} resolution matrix at {filedir}')
             plt.show()
             plt.close()
-        # with open(os.path.join(save_dir, f'crosscorrs_edge_mean_{edge_mean}_{resolution.lower()}.pkl'), 'wb') as f:
-        #     pickle.dump(crosscorrs, f)
-        # with open(os.path.join(save_dir, f'autocorrs_edge_mean_{edge_mean}_{resolution.lower()}.pkl'), 'wb') as f:
-        #     pickle.dump(autocorrs, f)
-        # print(f'Saved {resolution} resolution crosscorrs and autocorrs at {save_dir}')
+
+
     return configs
 
 
