@@ -230,7 +230,6 @@ def compute_correlogram_normalized_cc_first(
 
     def bin_correlate(x, y, max_lag_ms, bin_size, T, mode):
         max_lag_bins = int(max_lag_ms / bin_size)
-        print(max_lag_bins,max_lag_ms,bin_size,T)
         x = np.pad(x, (0, T - len(x)), 'constant')
         y = np.pad(y, (0, T - len(y)), 'constant')
 
@@ -411,7 +410,6 @@ def compute_correlogram_normalized(x, y, max_lag_ms, bin_size, mode, score_type=
         pct_empty = np.mean(corr_normalized == 0)
         if len(peaks) > 0:
             total_score += np.sum(corr_normalized[peaks] * (1 - pct_empty))
-    print(lags,corr_normalized)
     
     return lags, corr_normalized, mean_normalized, std_normalized, scores, total_score
 
