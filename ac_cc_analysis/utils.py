@@ -240,8 +240,9 @@ def compute_correlogram_normalized_cc_first(
         # convert all values to integers
         corr_trim = corr_trim
         if mode == 'auto':
-            # remove the center bin
-            corr_trim[len(corr_trim)//2] -= np.sum(x)
+            # remove the center bin directly from the corr_trim so is one less bin
+            corr_trim = np.delete(corr_trim, len(corr_trim)//2)
+            # corr_trim[len(corr_trim)//2] -= np.sum(x)
 
         lags = np.arange(-max_lag_bins, max_lag_bins + 1) * bin_size
         binned = np.array([
@@ -250,17 +251,12 @@ def compute_correlogram_normalized_cc_first(
         ])
         return (lags[:-1] + lags[1:]) / 2, binned
     
-
-
-    
-    
     def normalize(binned, fr_x, fr_y, T, bin_size):
         E = fr_x * fr_y * T * bin_size 
         return binned / E if E > 0 else binned.copy()
 
     def pct_empty(cc):
         return np.mean(cc < 1e-3)
-
 
     def bump_score(cc, baseline, max_lag):
         # max_lag is in milliseconds for one direction, so we need to double it for the full window width
@@ -294,7 +290,6 @@ def compute_correlogram_normalized_cc_first(
         # print(scores)
         return total, scores
 
-
     def multi_score(lags, cc):
         if len(cc) < 8:
             return 0.0
@@ -306,6 +301,7 @@ def compute_correlogram_normalized_cc_first(
         p, props = find_peaks(dev, prominence=0.005 * cc.mean(), distance=2)
         max_prom = props['prominences'].max() / cc.mean() if len(p) else 0
         return dip * (1 + max_prom * 3)
+    
     def snr_excess_area(cc_norm, mean_cc, std_cc):
         if mean_cc <= 0:
             return 0.0
